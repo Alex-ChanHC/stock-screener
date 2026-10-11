@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from src import phase2_finviz
 from src.screening_config import get_screening_config
@@ -106,6 +107,29 @@ def test_technical_filters_use_exact_price_and_moving_average_conditions(monkeyp
     )
 
     assert phase2_finviz._passes_price_and_moving_average_filters("TEST") is True
+
+
+@pytest.mark.parametrize("latest_close", [200.0, 198.0], ids=["flat", "falling"])
+def test_technical_filters_reject_non_rising_50_day_average(
+    monkeypatch, caplog, latest_close
+):
+    caplog.set_level("INFO", logger="src.phase2_finviz")
+    index = pd.date_range("2024-01-01", periods=520, freq="D")
+    closes = pd.Series(
+        [100.0] * 370 + [200.0] * 100 + [190.0] * 49 + [latest_close],
+        index=index,
+    )
+    history = pd.DataFrame(
+        {"Close": closes, "High": closes + 1.0, "Low": closes - 1.0},
+    )
+    monkeypatch.setattr(
+        phase2_finviz.yf,
+        "Ticker",
+        lambda _ticker: type("FakeTicker", (), {"history": lambda *_args, **_kwargs: history})(),
+    )
+
+    assert phase2_finviz._passes_price_and_moving_average_filters("TEST") is False
+    assert "short moving average rising" in caplog.text
 
 
 def test_technical_filters_reject_price_more_than_25_percent_below_high(monkeypatch):

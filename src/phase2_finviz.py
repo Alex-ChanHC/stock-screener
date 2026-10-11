@@ -182,11 +182,12 @@ def _passes_price_and_moving_average_filters(ticker: str) -> bool:
     closes = pd.to_numeric(year["Close"], errors="coerce").dropna()
     highs = pd.to_numeric(year["High"], errors="coerce").dropna()
     lows = pd.to_numeric(year["Low"], errors="coerce").dropna()
+    close_history = pd.to_numeric(history["Close"], errors="coerce").dropna()
     if (
         len(closes) != config.price_history_days
         or len(highs) != config.price_history_days
         or len(lows) != config.price_history_days
-        or len(history["Close"].dropna()) < config.sma_long_days
+        or len(close_history) < max(config.sma_long_days, config.sma_short_days + 1)
     ):
         LOGGER.warning("Incomplete OHLC history for %s; excluding ticker.", ticker)
         return False
@@ -194,8 +195,10 @@ def _passes_price_and_moving_average_filters(ticker: str) -> bool:
     current_price = float(closes.iloc[-1])
     high_52w = float(highs.max())
     low_52w = float(lows.min())
-    close_history = pd.to_numeric(history["Close"], errors="coerce").dropna()
     sma_short = float(close_history.tail(config.sma_short_days).mean())
+    previous_sma_short = float(
+        close_history.iloc[-(config.sma_short_days + 1) : -1].mean()
+    )
     sma_long = float(close_history.tail(config.sma_long_days).mean())
 
     if low_52w <= 0 or high_52w <= 0:
@@ -209,6 +212,7 @@ def _passes_price_and_moving_average_filters(ticker: str) -> bool:
         "price within configured 52-week-high distance": current_price
         >= high_52w * (1 - config.max_below_52w_high_pct),
         "short moving average above long moving average": sma_short > sma_long,
+        "short moving average rising": sma_short > previous_sma_short,
     }
     failed = [condition for condition, passes in checks.items() if not passes]
     if failed:
