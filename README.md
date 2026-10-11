@@ -66,6 +66,20 @@ data feeds can change or be temporarily unavailable; consult the logs and
 notification when a run produces no candidates. A successful ntfy publish
 confirms server acceptance, not delivery to a particular device.
 
+For a live data check that prints the candidates and exact notification preview
+without sending it:
+
+```powershell
+$env:RUN_LIVE_SCREENING = "1"
+python -m pytest -s tests/test_live_screening.py
+Remove-Item Env:RUN_LIVE_SCREENING
+```
+
+This opt-in integration test uses real market-data providers and requires the
+local `.screening.env`. It is skipped during the regular test suite unless
+`RUN_LIVE_SCREENING=1` is set. Review the preview, then run `python main.py`
+separately when ready to send the live notification.
+
 ## GitHub Actions setup
 
 The workflow runs on weekdays and can also be started manually from the Actions
