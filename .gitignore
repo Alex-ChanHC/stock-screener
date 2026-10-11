@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+.screening.env
+README.private.md
+Instructions.private.md
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]

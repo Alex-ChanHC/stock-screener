@@ -1,0 +1,48 @@
+name: Stock Screener
+
+on:
+  schedule:
+    - cron: "0 22 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  screener:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest
+
+      - name: Write private screening configuration
+        env:
+          SCREENING_ENV_FILE: ${{ secrets.SCREENING_ENV_FILE }}
+        run: |
+          if [ -z "$SCREENING_ENV_FILE" ]; then
+            echo "SCREENING_ENV_FILE secret is required."
+            exit 1
+          fi
+          printf '%s\n' "$SCREENING_ENV_FILE" > .screening.env
+          chmod 600 .screening.env
+
+      - name: Run stock screener
+        env:
+          NOTIFICATION_PROVIDER: ${{ vars.NOTIFICATION_PROVIDER || 'ntfy' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ vars.NTFY_SERVER || 'https://ntfy.sh' }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python main.py
