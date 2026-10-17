@@ -36,16 +36,44 @@ def main(test_notification: bool = False, notifier: str = None) -> dict:
         LOGGER.info("%s test alert sent successfully.", selected_notifier)
         return {"alert_sent": True, "notifier": selected_notifier}
 
-    sectors = get_outperforming_sectors()
-    LOGGER.info("Outperforming sectors: %s", sectors)
+    sectors = []
+    candidates = []
+    results = []
+    voo_benchmark = {"status": "not checked", "sctr": None, "momentum_proxy": None}
+    flow_errors = []
 
-    candidates = screen_stocks(sectors)
-    LOGGER.info("Candidate tickers discovered: %d", len(candidates))
+    try:
+        sectors = get_outperforming_sectors()
+        LOGGER.info("Outperforming sectors: %s", sectors)
+    except Exception as exc:
+        LOGGER.exception("Phase 1 sector screening failed.")
+        flow_errors.append(f"Phase 1 failed ({type(exc).__name__}); check run logs.")
 
-    results, voo_benchmark = filter_by_sctr(candidates)
-    LOGGER.info("Passing stocks after SCTR/proxy ranking: %d", len(results))
+    if not flow_errors:
+        try:
+            candidates = screen_stocks(sectors)
+            LOGGER.info("Candidate tickers discovered: %d", len(candidates))
+        except Exception as exc:
+            LOGGER.exception("Phase 2 stock screening failed.")
+            flow_errors.append(f"Phase 2 failed ({type(exc).__name__}); check run logs.")
 
-    alert_sent = send_alert(selected_notifier, results, voo_benchmark, sectors)
+    if not flow_errors:
+        try:
+            results, voo_benchmark = filter_by_sctr(candidates)
+            LOGGER.info("Passing stocks after SCTR/proxy ranking: %d", len(results))
+        except Exception as exc:
+            LOGGER.exception("Phase 3 ranking failed.")
+            flow_errors.append(f"Phase 3 failed ({type(exc).__name__}); check run logs.")
+
+    alert_sent = send_alert(
+        selected_notifier,
+        results,
+        voo_benchmark,
+        sectors,
+        flow_errors=flow_errors,
+    )
+    if not alert_sent:
+        LOGGER.error("%s alert delivery failed.", selected_notifier)
     LOGGER.info("%s alert sent: %s", selected_notifier, alert_sent)
 
     return {
@@ -56,6 +84,7 @@ def main(test_notification: bool = False, notifier: str = None) -> dict:
         "voo_benchmark": voo_benchmark,
         "alert_sent": alert_sent,
         "notifier": selected_notifier,
+        "flow_errors": flow_errors,
     }
 
 

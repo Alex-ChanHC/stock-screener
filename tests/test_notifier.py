@@ -91,7 +91,7 @@ def test_fallback_scores_are_explicitly_not_labeled_as_sctr():
         "1 candidate comparison(s) proxied"
     ) in message
     assert "Proxy: momentum (12M/6M return and RSI percentiles)." in message
-    assert "[Technology] - AAPL momentum proxy:75.0" in message
+    assert "[Technology] - AAPL proxy:75.0" in message
     assert "SCTR not compared" not in message
 
 
@@ -102,8 +102,10 @@ def test_verified_scores_are_labeled_as_sctr():
         ["Technology"],
     )
 
-    assert "VOO SCTR:55.0 (US ETFs); stocks: Large-Cap" in message
-    assert "[Technology] - MSFT 70.0" in message
+    assert "VOO SCTR:55.0" in message
+    assert "[Technology] - MSFT" in message
+    assert "Large-Cap" not in message
+    assert "70.0" not in message
 
 
 def test_mixed_results_are_grouped_by_sector_with_both_voo_benchmarks():
@@ -127,16 +129,17 @@ def test_mixed_results_are_grouped_by_sector_with_both_voo_benchmarks():
     )
 
     assert (
-        "VOO SCTR:55.0 (US ETFs); stocks: Large-Cap/Mid-Cap; "
-        "report 9 Oct 2026"
+        "VOO SCTR:55.0; report 9 Oct 2026"
     ) in message
     assert (
         "SCTR missing for 1 stock(s); proxy used for 1; "
         "VOO momentum proxy:86.0"
     ) in message
     assert "Proxy: momentum (12M/6M return and RSI percentiles)." in message
-    assert "[Healthcare] - LLY 64.4" in message
-    assert "[Technology] - AMZN momentum proxy:88.9, MSFT 71.2" in message
+    assert "[Healthcare] - LLY" in message
+    assert "[Technology] - AMZN proxy:88.9, MSFT" in message
+    assert "71.2" not in message
+    assert "64.4" not in message
 
 
 def test_message_identifies_different_etf_and_stock_report_dates():
@@ -174,3 +177,28 @@ def test_long_notification_is_truncated_to_provider_safe_size():
 
     assert len(message) <= notifier.MAX_NOTIFICATION_LENGTH
     assert "omitted" in message
+
+
+def test_flow_error_is_appended_after_stock_output():
+    message = notifier._format_message(
+        [{"ticker": "MSFT", "sector": "Technology", "sctr": 70.0}],
+        {"status": "SCTR", "sctr": 55.0},
+        ["Technology"],
+        ["Phase 2 failed (RuntimeError); check run logs."],
+    )
+
+    assert "[Technology] - MSFT" in message
+    assert message.endswith("⚠️ Phase 2 failed (RuntimeError); check run logs.")
+
+
+def test_incomplete_run_without_results_is_not_reported_as_no_matches():
+    message = notifier._format_message(
+        [],
+        {"status": "not checked", "sctr": None},
+        [],
+        ["Phase 1 failed (RuntimeError); check run logs."],
+    )
+
+    assert "Screening incomplete." in message
+    assert "No qualifying stocks found." not in message
+    assert message.endswith("⚠️ Phase 1 failed (RuntimeError); check run logs.")

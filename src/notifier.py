@@ -1,7 +1,7 @@
 import html
 import logging
 import os
-from typing import Dict, Iterable, List, Union
+from typing import Dict, Iterable, List, Optional, Union
 
 import requests
 
@@ -14,6 +14,7 @@ def _format_message(
     results: Iterable[dict],
     voo_benchmark: Union[dict, float, None],
     outperforming_sectors: List[str],
+    flow_errors: Optional[List[str]] = None,
 ) -> str:
     if isinstance(voo_benchmark, dict):
         benchmark_status = voo_benchmark.get("status", "not checked")
@@ -25,7 +26,6 @@ def _format_message(
         report_time = voo_benchmark.get("report_time")
         etf_report_time = voo_benchmark.get("etf_report_time", report_time)
         stock_report_time = voo_benchmark.get("stock_report_time", report_time)
-        stock_universes = voo_benchmark.get("stock_universes", [])
     else:
         benchmark_status = "momentum proxy" if voo_benchmark is None else "SCTR"
         voo_sctr = voo_benchmark
@@ -36,9 +36,9 @@ def _format_message(
         report_time = None
         etf_report_time = None
         stock_report_time = None
-        stock_universes = []
 
     lines = ["Stock Screener"]
+    footer = [f"⚠️ {error}" for error in flow_errors or []]
     if outperforming_sectors:
         lines.append("Sectors: " + ", ".join(outperforming_sectors))
     if benchmark_status == "not checked":
@@ -65,17 +65,7 @@ def _format_message(
             date_label = f"; report {etf_report_time or stock_report_time}"
         else:
             date_label = f"; report {report_time}" if report_time else ""
-        if stock_universes:
-            universe_label = "/".join(
-                str(universe).replace("US ", "")
-                for universe in stock_universes
-            )
-        else:
-            universe_label = "Large-Cap"
-        lines.append(
-            f"VOO SCTR:{float(voo_sctr):.1f} (US ETFs); "
-            f"stocks: {universe_label}{date_label}"
-        )
+        lines.append(f"VOO SCTR:{float(voo_sctr):.1f}{date_label}")
         if sctr_unavailable_count:
             proxy_text = (
                 f"; VOO momentum proxy:{float(voo_proxy):.1f}"
@@ -99,18 +89,9 @@ def _format_message(
             sector = str(item.get("sector") or "Other")
             ticker = str(item.get("ticker", "N/A"))
             if item.get("score_type") == "momentum proxy" or item.get("sctr_compared") is False:
-                entry = (
-                    f"{ticker} momentum proxy:"
-                    f"{float(item.get('momentum_score', 0.0)):.1f}"
-                )
+                entry = f"{ticker} proxy:{float(item.get('momentum_score', 0.0)):.1f}"
             else:
-                universe = item.get("sctr_universe")
-                universe_label = (
-                    f" [{str(universe).replace('US ', '')}]"
-                    if universe
-                    else ""
-                )
-                entry = f"{ticker} {float(item.get('sctr', 0.0)):.1f}{universe_label}"
+                entry = ticker
             grouped.setdefault(sector, []).append(entry)
 
         sector_order = {sector: index for index, sector in enumerate(outperforming_sectors)}
@@ -125,7 +106,7 @@ def _format_message(
                 for sector, entries in groups
                 if entries
             ]
-            message_lines = lines + grouped_lines
+            message_lines = lines + grouped_lines + footer
             if omitted:
                 message_lines.append(f"... +{omitted} omitted")
             message = "\n".join(message_lines)
@@ -138,11 +119,13 @@ def _format_message(
                     omitted += 1
                     break
             else:
-                return "\n".join(lines)[:MAX_NOTIFICATION_LENGTH]
+                return "\n".join((lines + footer))[:MAX_NOTIFICATION_LENGTH]
     else:
-        lines.append("No qualifying stocks found.")
+        lines.append(
+            "Screening incomplete." if flow_errors else "No qualifying stocks found."
+        )
 
-    return "\n".join(lines)
+    return "\n".join(lines + footer)
 
 
 def _send_telegram(message: str) -> bool:
@@ -241,6 +224,7 @@ def send_alert(
     results: Iterable[dict],
     voo_benchmark: Union[dict, float, None],
     outperforming_sectors: List[str],
+    flow_errors: Optional[List[str]] = None,
 ) -> bool:
     """Send a screener alert through the selected notification provider."""
     normalized_provider = provider.strip().lower()
@@ -250,7 +234,7 @@ def send_alert(
             f"{', '.join(SUPPORTED_PROVIDERS)}."
         )
 
-    message = _format_message(results, voo_benchmark, outperforming_sectors)
+    message = _format_message(results, voo_benchmark, outperforming_sectors, flow_errors)
     senders = {
         "telegram": _send_telegram,
         "ntfy": _send_ntfy,

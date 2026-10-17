@@ -80,6 +80,12 @@ local `.screening.env`. It is skipped during the regular test suite unless
 `RUN_LIVE_SCREENING=1` is set. Review the preview, then run `python main.py`
 separately when ready to send the live notification.
 
+If a screening phase raises an error during a normal run, later phases are
+skipped and the notification includes a short warning identifying the failed
+phase. Check the workflow or terminal logs for diagnostic details. If the
+notification provider itself is unavailable, delivery cannot be reported in
+the notification; the run logs the delivery failure instead.
+
 ## GitHub Actions setup
 
 The workflow runs on weekdays and can also be started manually from the Actions
