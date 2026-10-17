@@ -1,0 +1,71 @@
+name: Finviz compatibility check
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/finviz-health.yml"
+      - "scripts/check_finviz_health.py"
+      - "src/phase2_finviz.py"
+      - "tests/test_finviz_health.py"
+      - "tests/test_phase2.py"
+  schedule:
+    - cron: "0 13 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  finviz-health:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Install health check dependencies
+        run: python -m pip install pytest requests beautifulsoup4 pandas yfinance python-dotenv
+
+      - name: Run offline health check tests
+        run: python -m pytest -q tests/test_finviz_health.py tests/test_phase2.py
+
+      - name: Check live Finviz response
+        id: health
+        run: python -m scripts.check_finviz_health
+        continue-on-error: true
+
+      - name: Create or update diagnostic issue
+        if: steps.health.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          issue_number=$(gh issue list --state open --limit 100 --json number,title --jq '.[] | select(.title == "Finviz compatibility check failed") | .number' | head -n 1)
+          body="The scheduled compatibility check could not confirm that Finviz is returning a parseable screener response. No stock alerts were sent by this check. Review the [workflow logs]($RUN_URL), investigate the provider response, and close this issue after the check passes again."
+          if [ -n "$issue_number" ]; then
+            gh issue comment "$issue_number" --body "$body"
+          else
+            gh issue create --title "Finviz compatibility check failed" --body "$body"
+          fi
+
+      - name: Close diagnostic issue after recovery
+        if: steps.health.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          issue_number=$(gh issue list --state open --limit 100 --json number,title --jq '.[] | select(.title == "Finviz compatibility check failed") | .number' | head -n 1)
+          if [ -n "$issue_number" ]; then
+            gh issue close "$issue_number" --comment "Finviz compatibility check passed again. See the latest workflow run for details."
+          fi
+
+      - name: Mark failed health check
+        if: steps.health.outcome == 'failure'
+        run: exit 1
