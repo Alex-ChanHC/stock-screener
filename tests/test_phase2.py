@@ -17,11 +17,12 @@ def test_finviz_ticker_parser_handles_html_encoded_links_and_deduplicates():
       <tr><td><a href="/quote.ashx?t=NVDA&amp;ty= c&amp;p=d&amp;b=1">NVDA</a></td></tr>
       <tr><td><a href="/quote.ashx?t=NVDA">NVDA</a></td></tr>
       <tr><td><a href="stock?t=LLY&amp;ty=c&amp;p=d&amp;b=1">LLY</a></td></tr>
+      <tr><td><a href="/quote?t=CVX&amp;b=1">CVX</a></td></tr>
       <tr><td><a href="/quote.ashx?t=BRK.B">BRK.B</a></td></tr>
     </table>
     """
 
-    assert phase2_finviz._parse_finviz_tickers(html) == ["NVDA", "LLY", "BRK.B"]
+    assert phase2_finviz._parse_finviz_tickers(html) == ["NVDA", "LLY", "CVX", "BRK.B"]
 
 
 def test_finviz_empty_response_logs_diagnostic_page_details(monkeypatch, caplog):
