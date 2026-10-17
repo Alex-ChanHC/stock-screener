@@ -88,8 +88,9 @@ the notification; the run logs the delivery failure instead.
 
 ## GitHub Actions setup
 
-The workflow runs on weekdays and can also be started manually from the Actions
-tab. Configure repository secrets for:
+The stock screener workflow uses the schedule configured in
+`.github/workflows/screener.yml` and can also be started manually from the
+Actions tab. Configure repository secrets for:
 
 - `SCREENING_ENV_FILE` — the complete contents of your private screening
   environment file, in dotenv format
@@ -100,6 +101,21 @@ tab. Configure repository secrets for:
 Set the `NOTIFICATION_PROVIDER` and `NTFY_SERVER` repository variables when
 needed. Tests use synthetic settings and do not require the private configuration
 or notification secrets.
+
+The separate **Finviz compatibility check** runs every Sunday at 21:30 Hong Kong
+time and can also be started manually from the Actions tab. It runs its offline
+parser tests and checks a broad, public Finviz screener response. It does not
+read the private screening configuration, send notifications, or change
+screening results. If it cannot parse ticker links, it creates or updates one
+diagnostic issue with a link to the workflow logs; after a later successful
+check, it closes that issue.
+
+The workflow uses the built-in `GITHUB_TOKEN` with `issues: write` permission.
+If organization or repository policy prevents issue creation, enable read/write
+workflow permissions in **Settings → Actions → General**, or ask an organization
+administrator. For a code investigation, assign the diagnostic issue to Copilot
+or start Copilot coding agent from the issue. It will propose changes for review;
+the health workflow itself never changes or merges code.
 
 ## Adopting the project
 
