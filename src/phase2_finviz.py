@@ -139,7 +139,7 @@ def _parse_finviz_tickers(response_text: str) -> List[str]:
         href = anchor.get("href", "")
         parsed_url = urlsplit(href)
         route = parsed_url.path.rstrip("/").rsplit("/", 1)[-1].casefold()
-        if route not in {"stock", "quote.ashx"}:
+        if route not in {"stock", "quote", "quote.ashx"}:
             continue
         ticker_values = parse_qs(parsed_url.query).get("t", [])
         if ticker_values and re.fullmatch(r"[A-Z0-9.\-]{1,10}", ticker_values[0]):
