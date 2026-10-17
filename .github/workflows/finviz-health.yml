@@ -11,7 +11,7 @@ on:
       - "tests/test_finviz_health.py"
       - "tests/test_phase2.py"
   schedule:
-    - cron: "30 13 * * 0"
+    - cron: "0 13 * * 6"
   workflow_dispatch:
 
 permissions:
