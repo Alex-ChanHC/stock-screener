@@ -36,3 +36,38 @@ def test_test_mode_uses_provider_from_environment(monkeypatch):
 
     assert result["notifier"] == "discord"
     assert sent_providers == ["discord"]
+
+
+def test_pipeline_error_is_reported_in_alert_and_stops_later_stages(monkeypatch):
+    alerts = []
+    monkeypatch.setattr(
+        main,
+        "get_outperforming_sectors",
+        lambda: ["Technology"],
+    )
+
+    def fail_screen(_sectors):
+        raise RuntimeError("provider failure")
+
+    monkeypatch.setattr(main, "screen_stocks", fail_screen)
+    monkeypatch.setattr(
+        main,
+        "filter_by_sctr",
+        lambda _candidates: (_ for _ in ()).throw(AssertionError("must not run")),
+    )
+    monkeypatch.setattr(
+        main,
+        "send_alert",
+        lambda provider, results, benchmark, sectors, flow_errors=None: (
+            alerts.append((provider, results, benchmark, sectors, flow_errors)) or True
+        ),
+    )
+
+    result = main.main(notifier="ntfy")
+
+    assert result["flow_errors"] == [
+        "Phase 2 failed (RuntimeError); check run logs."
+    ]
+    assert alerts[0][0] == "ntfy"
+    assert alerts[0][4] == result["flow_errors"]
+    assert result["alert_sent"] is True
